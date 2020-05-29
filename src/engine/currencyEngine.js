@@ -40,6 +40,7 @@ import {
 import { logger } from '../utils/logger.js'
 import { promiseAny, validateObject } from '../utils/utils.js'
 import { broadcastFactories } from './broadcastApi.js'
+import { CurrencyEngineExtension } from './currencyEngineExtension'
 import type { EngineStateCallbacks } from './engineState.js'
 import { EngineState } from './engineState.js'
 import type { KeyManagerCallbacks } from './keyManager'
@@ -84,7 +85,8 @@ export type EngineCurrencyInfo = {
   forks?: Array<string>,
   earnComFeeInfoServer?: string,
   mempoolSpaceFeeInfoServer?: string,
-  timestampFromHeader?: (header: Buffer, height: number) => number
+  timestampFromHeader?: (header: Buffer, height: number) => number,
+  createCurrencyEngineExtension?: () => CurrencyEngineExtension
 }
 
 export type CurrencyEngineSettings = {
@@ -117,6 +119,7 @@ export class CurrencyEngine {
   feeTimer: any
   fees: BitcoinFees
   otherMethods: Object
+  engineExtension: ?CurrencyEngineExtension
 
   // ------------------------------------------------------------------------
   // Private API
@@ -143,6 +146,9 @@ export class CurrencyEngine {
     this.feeUpdateInterval = this.engineInfo.feeUpdateInterval
     this.currencyCode = this.engineInfo.currencyCode
     this.network = this.engineInfo.network
+    if (engineInfo.createCurrencyEngineExtension) {
+      this.engineExtension = engineInfo.createCurrencyEngineExtension()
+    }
 
     this.fees = { ...engineInfo.simpleFeeSettings, timestamp: 0 }
     logger.info(
@@ -165,12 +171,20 @@ export class CurrencyEngine {
     const engineStateCallbacks: EngineStateCallbacks = {
       onHeightUpdated: this.callbacks.onBlockHeightChanged,
       onTxFetched: (txid: string) => {
+        if (this.engineExtension && this.engineExtension.onTxFetched) {
+          this.engineExtension.onTxFetched(txid)
+          return
+        }
+
         const edgeTransaction = this.getTransactionSync(txid)
         this.callbacks.onTransactionsChanged([edgeTransaction])
       },
       onAddressesChecked: this.callbacks.onAddressesChecked
     }
 
+    const engineStateExtensions = this.engineExtension
+      ? this.engineExtension.engineStateExtensions
+      : null
     this.engineState = new EngineState({
       files: { txs: 'txs.json', addresses: 'addresses.json' },
       callbacks: engineStateCallbacks,
@@ -179,7 +193,8 @@ export class CurrencyEngine {
       encryptedLocalDisklet: this.walletLocalEncryptedDisklet,
       pluginState: this.pluginState,
       walletId: this.prunedWalletId,
-      engineInfo: this.engineInfo
+      engineInfo: this.engineInfo,
+      engineStateExtensions: engineStateExtensions
     })
 
     await this.engineState.load()
@@ -234,10 +249,18 @@ export class CurrencyEngine {
     }
 
     await this.keyManager.load()
+
+    if (this.engineExtension) {
+      await this.engineExtension.load(this)
+    }
   }
 
   async getTransaction(txid: string): Promise<EdgeTransaction> {
     await snooze(3) // Give up a tick so some GUI rendering can happen
+    if (this.engineExtension && this.engineExtension.getTransactionSync) {
+      return this.engineExtension.getTransactionSync(txid)
+    }
+
     return this.getTransactionSync(txid)
   }
 
@@ -415,6 +438,9 @@ export class CurrencyEngine {
   }
 
   async killEngine(): Promise<void> {
+    if (this.engineExtension && this.engineExtension.killEngine) {
+      await this.engineExtension.killEngine()
+    }
     clearTimeout(this.feeTimer)
     return this.engineState.disconnect()
   }
@@ -425,6 +451,18 @@ export class CurrencyEngine {
     await this.pluginState.clearCache()
     await this.keyManager.reload()
     await this.startEngine()
+    if (this.engineExtension && this.engineExtension.resyncBlockchain) {
+      this.engineExtension.resyncBlockchain()
+    }
+  }
+
+  onBalanceChanged() {
+    if (this.engineExtension && this.engineExtension.onBalanceChanged) {
+      this.engineExtension.onBalanceChanged()
+      return
+    }
+
+    this.callbacks.onBalanceChanged(this.currencyCode, this.getBalance())
   }
 
   getBlockHeight(): number {
@@ -537,6 +575,9 @@ export class CurrencyEngine {
       }
     }
 
+    const engineStateExtensions = this.engineExtension
+      ? this.engineExtension.engineStateExtensions
+      : null
     const engineState = new EngineState({
       files: { txs: '', addresses: '' },
       callbacks: engineStateCallbacks,
@@ -545,7 +586,8 @@ export class CurrencyEngine {
       encryptedLocalDisklet: this.walletLocalEncryptedDisklet,
       pluginState: this.pluginState,
       walletId: this.prunedWalletId,
-      engineInfo: this.engineInfo
+      engineInfo: this.engineInfo,
+      engineStateExtensions: engineStateExtensions
     })
 
     await engineState.load()
@@ -579,6 +621,10 @@ export class CurrencyEngine {
     edgeSpendInfo: EdgeSpendInfo,
     txOptions?: TxOptions = {}
   ): Promise<EdgeTransaction> {
+    if (this.engineExtension && this.engineExtension.makeSpend) {
+      return this.engineExtension.makeSpend(edgeSpendInfo, txOptions)
+    }
+
     const { spendTargets } = edgeSpendInfo
     // Can't spend without outputs
     if (!txOptions.CPFP && (!spendTargets || spendTargets.length < 1)) {
@@ -660,6 +706,13 @@ export class CurrencyEngine {
   }
 
   async signTx(edgeTransaction: EdgeTransaction): Promise<EdgeTransaction> {
+    if (this.engineExtension && this.engineExtension.signTx) {
+      const tx = await this.engineExtension.signTx(edgeTransaction)
+      if (tx != null) {
+        return tx
+      }
+    }
+
     if (edgeTransaction.otherParams == null) edgeTransaction.otherParams = {}
     const { otherParams } = edgeTransaction
     const { edgeSpendInfo, txJson } = otherParams
@@ -693,6 +746,10 @@ export class CurrencyEngine {
   async broadcastTx(
     edgeTransaction: EdgeTransaction
   ): Promise<EdgeTransaction> {
+    if (this.engineExtension && this.engineExtension.onBroadcastTx) {
+      await this.engineExtension.onBroadcastTx(edgeTransaction)
+    }
+
     if (edgeTransaction.otherParams == null) edgeTransaction.otherParams = {}
     const { otherParams, signedTx, currencyCode } = edgeTransaction
     const { paymentProtocolInfo } = otherParams

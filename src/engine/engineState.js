@@ -34,6 +34,7 @@ import {
 import { logger } from '../utils/logger.js'
 import { pushUpdate, removeIdFromQueue } from '../utils/updateQueue.js'
 import { type EngineCurrencyInfo } from './currencyEngine.js'
+import { EngineStateExtension } from './engineStateExtension'
 
 export type UtxoInfo = {
   txid: string, // tx_hash from Stratum
@@ -96,6 +97,7 @@ export interface EngineStateOptions {
   pluginState: PluginState;
   walletId?: string;
   engineInfo: EngineCurrencyInfo;
+  engineStateExtensions: ?EngineStateExtension;
 }
 
 function nop() {}
@@ -345,6 +347,10 @@ export class EngineState extends EventEmitter {
   }
 
   getBalance(options: any): string {
+    if (this.stateExtension && this.stateExtension.getBalance) {
+      return this.stateExtension.getBalance(options)
+    }
+
     return Object.keys(this.addressInfos)
       .reduce((total, scriptHash) => {
         const { balance } = this.addressInfos[scriptHash]
@@ -377,6 +383,11 @@ export class EngineState extends EventEmitter {
   }
 
   dumpData(): any {
+    let dump = {}
+    if (this.stateExtension && this.stateExtension.dumpData) {
+      dump = this.stateExtension.dumpData()
+    }
+
     return {
       'engineState.addressCache': this.addressCache,
       'engineState.addressInfos': this.addressInfos,
@@ -388,7 +399,8 @@ export class EngineState extends EventEmitter {
       'engineState.serverStates': this.serverStates,
       'engineState.fetchingTxs': this.fetchingTxs,
       'engineState.missingTxs': this.missingTxs,
-      'engineState.fetchingHeader': this.fetchingHeaders
+      'engineState.fetchingHeader': this.fetchingHeaders,
+      ...dump
     }
   }
 
@@ -416,6 +428,7 @@ export class EngineState extends EventEmitter {
   progressRatio: number
   txCacheInitSize: number
   serverList: Array<string>
+  stateExtension: ?EngineStateExtension
 
   constructor(options: EngineStateOptions) {
     super()
@@ -441,6 +454,7 @@ export class EngineState extends EventEmitter {
     this.pluginState = options.pluginState
     this.serverList = []
     this.engineInfo = options.engineInfo
+    this.stateExtension = options.engineStateExtensions
     const {
       onBalanceChanged = nop,
       onAddressUsed = nop,
@@ -844,10 +858,17 @@ export class EngineState extends EventEmitter {
         )
       }
     }
+
+    if (this.stateExtension && this.stateExtension.pickNextTask) {
+      return this.stateExtension.pickNextTask(uri, stratumVersion)
+    }
   }
 
   async load() {
     logger.info(`${this.walletId} - Loading wallet engine caches`)
+    if (this.stateExtension) {
+      this.stateExtension.setUp(this)
+    }
 
     // Load transaction data cache:
     try {
@@ -910,6 +931,10 @@ export class EngineState extends EventEmitter {
       this.addressInfos = {}
       this.txHeightCache = {}
       logger.info(`${this.walletId}: Failed to load address cache: ${e}`)
+    }
+
+    if (this.stateExtension && this.stateExtension.load) {
+      this.stateExtension.load()
     }
 
     return this
