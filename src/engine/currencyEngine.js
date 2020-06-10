@@ -787,8 +787,11 @@ export class CurrencyEngine {
     return edgeTransaction
   }
 
-  saveTx(edgeTransaction: EdgeTransaction): Promise<void> {
+  async saveTx(edgeTransaction: EdgeTransaction): Promise<void> {
     this.logEdgeTransaction(edgeTransaction, 'Saving')
+    if (this.engineExtension && this.engineExtension.saveTx) {
+      await this.engineExtension.saveTx(edgeTransaction)
+    }
     this.engineState.saveTx(edgeTransaction.txid, edgeTransaction.signedTx)
     return Promise.resolve()
   }

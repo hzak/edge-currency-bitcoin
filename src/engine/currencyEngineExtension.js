@@ -18,6 +18,7 @@ export interface CurrencyEngineExtension {
   +onTxFetched?: (txid: string) => void;
   +onBalanceChanged?: () => void;
   +onBroadcastTx?: (edgeTransaction: EdgeTransaction) => Promise<void>;
+  +saveTx?: (edgeTransaction: EdgeTransaction) => Promise<void>;
   +getTransactionSync?: (txid: string) => EdgeTransaction;
   +signTx?: (edgeTransaction: EdgeTransaction) => Promise<?EdgeTransaction>;
   +makeSpend?: (
