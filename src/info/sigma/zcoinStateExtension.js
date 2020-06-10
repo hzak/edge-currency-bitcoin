@@ -58,6 +58,11 @@ export class ZcoinStateExtension implements EngineStateExtension {
   coinGroup: ?(CoinGroup[])
   retrievedCoinGroup: ?boolean
 
+  constructor() {
+    this.missingTxsVerbose = {}
+    this.mintedCoins = []
+  }
+
   setUp(engineState: EngineState) {
     this.engineState = engineState
     this.encryptedLocalDisklet = this.engineState.encryptedLocalDisklet
@@ -67,6 +72,11 @@ export class ZcoinStateExtension implements EngineStateExtension {
     if (verbose) {
       this.missingTxsVerbose[txid] = true
     }
+  }
+
+  getBalance(options: any): string {
+    const totalMinted = this.mintsTotalAmount()
+    return totalMinted.toString()
   }
 
   async load() {
@@ -344,6 +354,15 @@ export class ZcoinStateExtension implements EngineStateExtension {
       }
       checkResponse()
     })
+  }
+
+  mintsTotalAmount() {
+    return this.mintedCoins.reduce((total, coin) => {
+      if (coin.groupId !== -1 && !coin.isSpend) {
+        total += coin.value
+      }
+      return total
+    }, 0)
   }
 
   getLastPrivateCoinIndex() {
