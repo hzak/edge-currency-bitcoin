@@ -87,6 +87,12 @@ export class ZcoinStateExtension implements EngineStateExtension {
     })
   }
 
+  dumpData(): any {
+    return {
+      'engineState.missingTxsVerbose': this.missingTxsVerbose
+    }
+  }
+
   pickNextTask(uri: string, stratumVersion: string): StratumTask | void {
     logger.info('zcoinEngineExtension -> zcoinStateExtension -> pickNextTask')
     const serverState = this.engineState.serverStates[uri]

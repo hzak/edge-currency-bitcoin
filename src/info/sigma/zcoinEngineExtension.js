@@ -20,6 +20,7 @@ import type { TxOptions } from '../../utils/coinUtils.js'
 import { logger } from '../../utils/logger'
 import { getMintsToSpend } from './coinOperations'
 import {
+  createPrivateCoin,
   createSpendTX,
   getMintCommitmentsForValue,
   parseJsonTransactionForSpend,
@@ -28,7 +29,7 @@ import {
 } from './coinUtils'
 import type { SpendCoin } from './coinUtils.js'
 import type { PrivateCoin } from './flowTypes'
-import { denominations, OP_SIGMA_MINT } from './flowTypes'
+import { denominations, OP_SIGMA_MINT, RESTORE_FILE } from './flowTypes'
 import { ZcoinStateExtension } from './zcoinStateExtension'
 
 const MILLI_TO_SEC = 1000
@@ -63,6 +64,17 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     this.io = this.currencyEngine.io
 
     this.runLooperIfNeed()
+  }
+
+  async resyncBlockchain() {
+    window.setTimeout(() => {
+      this.forceReloadSpendTransactions()
+      this.zcoinStateExtensions.wakeUpConnections()
+    }, 5000)
+  }
+
+  async killEngine() {
+    this.cancelAllLooperMethods()
   }
 
   onTxFetched(txid: string) {
@@ -112,6 +124,11 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   async loop() {
     logger.info('zcoinEngineExtension -> loop called')
 
+    const restored = await this.restore()
+    if (!restored) {
+      return
+    }
+
     // TODO: can move into newTx
     const utxos = this.engineState.getUTXOs()
     const needToMint = sumUtxos(utxos)
@@ -135,13 +152,92 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
           }
         ]
       }
-      // mint and getMintMetadataLoop must not work paralelly in order to avoid problems related to modifying mint.json parallely
       await this.mint(edgeInfo)
     }
 
     await this.getMintMetadataLoop()
 
     this.onBalanceChanged()
+  }
+
+  async restore(): Promise<boolean> {
+    logger.info('zcoinEngineExtension -> restore')
+
+    try {
+      const restoreJsonStr = await this.walletLocalEncryptedDisklet.getText(
+        RESTORE_FILE
+      )
+      if (restoreJsonStr && JSON.parse(restoreJsonStr).restored) {
+        return true
+      }
+    } catch (e) {
+      logger.error('zcoinEngineExtension -> something went wrong', e)
+    }
+
+    const mintData: PrivateCoin[] = []
+
+    let usedSerialNumbers = []
+    const usedCoins = await this.zcoinStateExtensions.retrieveUsedCoinSerials()
+    usedSerialNumbers = usedCoins.serials
+
+    const latestCoinIds = await this.zcoinStateExtensions.retrieveLatestCoinIds()
+    let commitmentCount = 0
+    for (const coinInfo of latestCoinIds) {
+      coinInfo.anonymitySet = []
+      for (let i = 0; i < coinInfo.id; i++) {
+        const anonimitySet = await this.zcoinStateExtensions.retrieveAnonymitySet(
+          coinInfo.denom,
+          i + 1
+        )
+        coinInfo.anonymitySet = coinInfo.anonymitySet.concat(
+          anonimitySet.serializedCoins
+        )
+        commitmentCount += anonimitySet.serializedCoins.length
+      }
+    }
+
+    let counter = 0
+    let index = -1
+    while (counter++ < 100 && index++ < commitmentCount) {
+      // commitment is only dependant to private key and index, that's why coin value is hardcoded
+      const coin = await createPrivateCoin(
+        100000000,
+        this.currencyEngine.walletInfo.keys.dataKey,
+        index,
+        this.io
+      )
+      logger.info('zcoinEngineExtension -> restore coin ', coin)
+      const isSpend = usedSerialNumbers.includes(coin.serialNumber)
+      for (const coinInfo of latestCoinIds) {
+        if (coinInfo.anonymitySet.includes(coin.commitment)) {
+          mintData.push({
+            value: coinInfo.denom,
+            index: index,
+            commitment: coin.commitment,
+            serialNumber: '',
+            groupId: coinInfo.id,
+            isSpend: isSpend,
+            spendTxId: ''
+          })
+          counter = 0
+          break
+        }
+      }
+    }
+
+    try {
+      logger.info('zcoinEngineExtension -> restore try save ', mintData)
+      await this.zcoinStateExtensions.writeMintedCoins(mintData)
+      await this.walletLocalEncryptedDisklet.setText(
+        RESTORE_FILE,
+        JSON.stringify({ restored: true })
+      )
+      logger.info('zcoinEngineExtension -> restored')
+    } catch (e) {
+      return false
+    }
+
+    return true
   }
 
   runLooperIfNeed() {
@@ -656,5 +752,13 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     })
 
     return spendTransactionValues
+  }
+
+  forceReloadSpendTransactions() {
+    this.zcoinStateExtensions.mintedCoins.forEach(item => {
+      if (item.spendTxId) {
+        this.zcoinStateExtensions.handleNewTxid(item.spendTxId, true)
+      }
+    })
   }
 }
