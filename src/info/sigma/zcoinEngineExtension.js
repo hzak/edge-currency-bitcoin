@@ -18,9 +18,20 @@ import type { PluginIo } from '../../plugin/pluginIo'
 import { getReceiveAddresses, sumUtxos } from '../../utils/coinUtils'
 import type { TxOptions } from '../../utils/coinUtils.js'
 import { logger } from '../../utils/logger'
-import { getMintCommitmentsForValue } from './coinUtils'
-import { type PrivateCoin, denominations, OP_SIGMA_MINT } from './flowTypes'
+import { getMintsToSpend } from './coinOperations'
+import {
+  createSpendTX,
+  getMintCommitmentsForValue,
+  parseJsonTransactionForSpend,
+  signSpendTX,
+  sumTransaction
+} from './coinUtils'
+import type { SpendCoin } from './coinUtils.js'
+import type { PrivateCoin } from './flowTypes'
+import { denominations, OP_SIGMA_MINT } from './flowTypes'
 import { ZcoinStateExtension } from './zcoinStateExtension'
+
+const MILLI_TO_SEC = 1000
 
 export class ZcoinEngineExtension implements CurrencyEngineExtension {
   currencyEngine: CurrencyEngine
@@ -31,11 +42,13 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
   engineStateExtensions: EngineStateExtension
   zcoinStateExtensions: ZcoinStateExtension
+  savedSpendTransactionValues: { [key: string]: number }
 
   canRunLoop: boolean
   looperMethods: any
 
   constructor() {
+    this.savedSpendTransactionValues = {}
     this.zcoinStateExtensions = new ZcoinStateExtension()
     this.engineStateExtensions = this.zcoinStateExtensions
   }
@@ -52,6 +65,23 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     this.runLooperIfNeed()
   }
 
+  onTxFetched(txid: string) {
+    logger.info(`zcoinEngineExtension -> onTxFetched called txId ${txid}`)
+    if (txid in this.savedSpendTransactionValues) {
+      const edgeTransaction = this.getSpendTransactionSync(
+        txid,
+        this.savedSpendTransactionValues[txid]
+      )
+      this.currencyEngine.callbacks.onTransactionsChanged([edgeTransaction])
+    } else {
+      const edgeTransaction = this.getSpendTransactionSync(
+        txid,
+        this.getSpendTransactionValues()[txid]
+      )
+      this.currencyEngine.callbacks.onTransactionsChanged([edgeTransaction])
+    }
+  }
+
   onBalanceChanged() {
     logger.info('zcoinEngineExtension -> onBalanceChanged called')
 
@@ -64,10 +94,19 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   async saveTx(edgeTransaction: EdgeTransaction) {
     logger.info('zcoinEngineExtension -> saveTx called')
 
-    const { otherParams = {} } = edgeTransaction
-    const { mintsForSave = [] } = otherParams
+    const { otherParams = {}, txid = '' } = edgeTransaction
+    const {
+      mintsForSave = [],
+      spendCoins = [],
+      isSpend = false,
+      value = 0
+    } = otherParams
 
     await this.zcoinStateExtensions.appendMintedCoins(mintsForSave)
+    await this.zcoinStateExtensions.updateSpendCoins(spendCoins, txid)
+    if (isSpend) {
+      this.savedSpendTransactionValues[txid] = value
+    }
   }
 
   async loop() {
@@ -332,5 +371,290 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       })
       await this.zcoinStateExtensions.writeMintedCoins(mintData)
     }
+  }
+
+  async makeSpend(
+    edgeSpendInfo: EdgeSpendInfo,
+    txOptions?: TxOptions = {}
+  ): Promise<EdgeTransaction> {
+    logger.info('zcoinEngineExtension -> makeSpend called')
+
+    const { spendTargets } = edgeSpendInfo
+    // Can't spend without outputs
+    if (!txOptions.CPFP && (!spendTargets || spendTargets.length < 1)) {
+      throw new Error('Need to provide Spend Targets')
+    }
+    // Calculate the total amount to send
+    const totalAmountToSend = spendTargets.reduce(
+      (sum, { nativeAmount }) => bns.add(sum, nativeAmount || '0'),
+      '0'
+    )
+
+    const mintData: PrivateCoin[] = this.zcoinStateExtensions.mintedCoins
+    const currentMaxIndex = this.zcoinStateExtensions.getLastPrivateCoinIndex()
+    logger.info('zcoinEngineExtension -> spend mintData = ', mintData)
+
+    const approvedMints: PrivateCoin[] = []
+    mintData.forEach(info => {
+      if (info.groupId && info.groupId !== -1 && !info.isSpend) {
+        approvedMints.push(info)
+      }
+    })
+
+    // // Try and get UTXOs from `txOptions`, if unsuccessful use our own utxo's
+    let { utxos = this.engineState.getUTXOs() } = txOptions
+    utxos = JSON.parse(JSON.stringify(utxos))
+    // // Test if we have enough to spend
+    // if (bns.gt(totalAmountToSend, `${approvedMintedBalance}`)) {
+    //   throw new InsufficientFundsError()
+    // }
+
+    const remainder = totalAmountToSend || '0'
+    logger.info('zcoinEngineExtension -> spend remainder before ', remainder)
+    const mintsToBeSpend: PrivateCoin[] = getMintsToSpend(
+      approvedMints,
+      remainder
+    )
+    logger.info('zcoinEngineExtension -> mintsToBeSpend', mintsToBeSpend)
+    if (mintsToBeSpend.length === 0) {
+      throw new Error('InsufficientFundsError')
+    }
+
+    const spendCoins: SpendCoin[] = []
+    for (const info of mintsToBeSpend) {
+      // const retrievedData = await this.engineState.retrieveAnonymitySet(info.value, info.groupId)
+      // logger.info('zcoinEngineExtension -> retrieveAnonymitySet retrievedData', retrievedData)
+      spendCoins.push({
+        value: info.value,
+        anonymitySet: [], // retrievedData.serializedCoins,
+        blockHash: '1', // retrievedData.blockHash,
+        index: info.index,
+        groupId: info.groupId
+      })
+    }
+    logger.info('zcoinEngineExtension -> mints to be spend', mintsToBeSpend)
+
+    try {
+      // Get the rate according to the latest fee
+      const rate = this.currencyEngine.getRate(edgeSpendInfo)
+      logger.info(`spend: Using fee rate ${rate} sat/K`)
+      // Create outputs from spendTargets
+
+      const mintBalance = parseInt(
+        this.engineState.getBalance({ mintedBalance: true }),
+        10
+      )
+
+      for (let i = 0; i < utxos.length; i++) {
+        const len = utxos[i].tx.outputs.length
+        utxos[i].tx.outputs[len - 1].value = mintBalance
+      }
+
+      const outputs = []
+      for (const spendTarget of spendTargets) {
+        const {
+          publicAddress: address,
+          nativeAmount,
+          otherParams: { script } = {}
+        } = spendTarget
+        const value = parseInt(nativeAmount || '0')
+        if (address && nativeAmount) outputs.push({ address, value })
+        else if (script) outputs.push({ script, value })
+      }
+
+      const standardOutputs = await this.keyManager.convertToStandardOutputs(
+        outputs
+      )
+
+      // TODO: remove mints: mintedInTx not need
+      const {
+        tx: bcoinTx,
+        mints: mintedInTx,
+        spendFee,
+        value
+      } = await createSpendTX({
+        mints: spendCoins,
+        outputs: standardOutputs,
+        rate,
+        txOptions,
+        utxos,
+        height: this.currencyEngine.getBlockHeight(),
+        io: this.io,
+        privateKey: this.currencyEngine.walletInfo.keys.dataKey,
+        currentIndex: currentMaxIndex,
+        changeAddress: this.keyManager.getChangeAddress(),
+        estimate: prev => this.keyManager.fSelector.estimateSize(prev),
+        network: this.keyManager.network
+      })
+
+      const { scriptHashes } = this.engineState
+      const sumOfTx = spendTargets.reduce(
+        (s, { publicAddress, nativeAmount }: EdgeSpendTarget) =>
+          publicAddress && scriptHashes[publicAddress]
+            ? s
+            : s - parseInt(nativeAmount),
+        0
+      )
+
+      const addresses = getReceiveAddresses(
+        bcoinTx,
+        this.currencyEngine.network
+      )
+
+      const ourReceiveAddresses = addresses.filter(
+        address => scriptHashes[address]
+      )
+
+      const edgeTransaction: EdgeTransaction = {
+        ourReceiveAddresses,
+        otherParams: {
+          txJson: bcoinTx.getJSON(this.currencyEngine.network),
+          edgeSpendInfo,
+          rate,
+          isSpend: true,
+          mintedInTx,
+          spendCoins,
+          value,
+          currentIndex: currentMaxIndex
+        },
+        currencyCode: this.currencyEngine.currencyCode,
+        txid: '',
+        date: 0,
+        blockHeight: 0,
+        nativeAmount: `${sumOfTx}`,
+        networkFee: `${spendFee}`,
+        signedTx: ''
+      }
+
+      logger.info('zcoinEngineExtension -> spend 2', edgeTransaction)
+      return edgeTransaction
+    } catch (e) {
+      if (e.type === 'FundingError') throw new Error('InsufficientFundsError')
+      throw e
+    }
+  }
+
+  async signTx(edgeTransaction: EdgeTransaction): Promise<?EdgeTransaction> {
+    const { isSpend = false } = edgeTransaction.otherParams || {}
+    logger.info('zcoinEngineExtension -> signTx called is spend = ', isSpend)
+    if (!isSpend) {
+      return null
+    }
+
+    const { spendCoins, value, currentIndex, txJson } =
+      edgeTransaction.otherParams || {}
+    const spends: SpendCoin[] = []
+    for (const info of spendCoins) {
+      const retrievedData = await this.zcoinStateExtensions.retrieveAnonymitySet(
+        info.value,
+        info.groupId
+      )
+      // logger.info('zcoinEngineExtension -> retrieveAnonymitySet retrievedData', retrievedData)
+      spends.push({
+        value: info.value,
+        anonymitySet: retrievedData.serializedCoins,
+        blockHash: retrievedData.blockHash,
+        index: info.index,
+        groupId: info.groupId
+      })
+    }
+
+    const bTx = parseJsonTransactionForSpend(txJson)
+    logger.info('zcoinEngineExtension -> spend&mint: spend transaction', spends)
+
+    const { signedTx, txid, mintsForSave } = await signSpendTX(
+      bTx,
+      value,
+      currentIndex,
+      this.currencyEngine.walletInfo.keys.dataKey,
+      spends,
+      this.io
+    )
+
+    logger.info('zcoinEngineExtension -> spend&mint retrievedData', signedTx)
+    return {
+      ...edgeTransaction,
+      otherParams: {
+        ...edgeTransaction.otherParams,
+        mintsForSave,
+        spendCoins: spends
+      },
+      signedTx,
+      txid,
+      date: Date.now() / MILLI_TO_SEC
+    }
+  }
+
+  getTransactionSync(txid: string): EdgeTransaction {
+    logger.info('zcoinEngineExtension -> getTransactionSync called')
+    const spendTransactionValues = this.getSpendTransactionValues()
+    return this.getSpendTransactionSync(txid, spendTransactionValues[txid])
+  }
+
+  getSpendTransactionSync(txid: string, spendValue: number): EdgeTransaction {
+    const { height = -1, firstSeen = Date.now() / 1000 } =
+      this.engineState.txHeightCache[txid] || {}
+    let date = firstSeen
+    // If confirmed, we will try and take the timestamp as the date
+    if (height && height !== -1) {
+      const blockHeight = this.currencyEngine.pluginState.headerCache[
+        `${height}`
+      ]
+      if (blockHeight) {
+        date = blockHeight.timestamp
+      }
+    }
+
+    // Get parsed bcoin tx from engine
+    const bcoinTransaction = this.engineState.parsedTxs[txid]
+    if (!bcoinTransaction) {
+      throw new Error('Transaction not found')
+    }
+
+    const {
+      fee,
+      ourReceiveAddresses,
+      nativeAmount,
+      isMint: isSpecialTransaction
+    } = sumTransaction(
+      bcoinTransaction,
+      this.currencyEngine.network,
+      this.engineState,
+      spendValue
+    )
+
+    const sizes = bcoinTransaction.getSizes()
+    const debugInfo = `Inputs: ${bcoinTransaction.inputs.length}\nOutputs: ${bcoinTransaction.outputs.length}\nSize: ${sizes.size}\nWitness: ${sizes.witness}`
+    const edgeTransaction: EdgeTransaction = {
+      ourReceiveAddresses,
+      currencyCode: this.currencyEngine.currencyCode,
+      otherParams: {
+        debugInfo,
+        isSpecialTransaction
+      },
+      txid: txid,
+      date: date,
+      blockHeight: height === -1 ? 0 : height,
+      nativeAmount: `${nativeAmount}`,
+      networkFee: `${fee}`,
+      signedTx: this.engineState.txCache[txid]
+    }
+    return edgeTransaction
+  }
+
+  getSpendTransactionValues(): { [key: string]: number } {
+    // Get existing spend transaction ids
+    const spendTransactionValues = {}
+    const mintData = this.zcoinStateExtensions.mintedCoins
+    mintData.forEach(item => {
+      if (item.spendTxId) {
+        if (!(item.spendTxId in spendTransactionValues)) {
+          spendTransactionValues[item.spendTxId] = 0
+        }
+        spendTransactionValues[item.spendTxId] += item.value
+      }
+    })
+
+    return spendTransactionValues
   }
 }
