@@ -6,7 +6,9 @@ import { EngineState } from '../../engine/engineState'
 import { EngineStateExtension } from '../../engine/engineStateExtension'
 import type { StratumTask } from '../../stratum/stratumConnection'
 import { logger } from '../../utils/logger'
+import { type SpendCoin } from './coinUtils'
 import type { PrivateCoin } from './flowTypes'
+import { SIGMA_ENCRYPTED_FILE } from './flowTypes'
 import {
   fetchTransactionVerbose,
   getAnonymitySet,
@@ -59,6 +61,22 @@ export class ZcoinStateExtension implements EngineStateExtension {
   setUp(engineState: EngineState) {
     this.engineState = engineState
     this.encryptedLocalDisklet = this.engineState.encryptedLocalDisklet
+  }
+
+  handleNewTxid(txid: string, verbose: boolean) {
+    if (verbose) {
+      this.missingTxsVerbose[txid] = true
+    }
+  }
+
+  async load() {
+    // update the spend transactions
+    this.mintedCoins = await this.loadMintedCoins()
+    this.mintedCoins.forEach(item => {
+      if (item.spendTxId) {
+        this.handleNewTxid(item.spendTxId, true)
+      }
+    })
   }
 
   pickNextTask(uri: string, stratumVersion: string): StratumTask | void {
@@ -326,6 +344,73 @@ export class ZcoinStateExtension implements EngineStateExtension {
       }
       checkResponse()
     })
+  }
+
+  getLastPrivateCoinIndex() {
+    return this.mintedCoins.reduce((acc, coin) => {
+      return Math.max(coin.index, acc)
+    }, 0)
+  }
+
+  // TODO: change json struct
+  async loadMintedCoins(): Promise<PrivateCoin[]> {
+    let mints: PrivateCoin[] = []
+    try {
+      const jsonString = await this.encryptedLocalDisklet.getText(
+        SIGMA_ENCRYPTED_FILE
+      )
+      logger.info(
+        'zcoinEngineExtension -> zcoinStateExtension -> loadMintedCoins: ',
+        jsonString
+      )
+      mints = JSON.parse(jsonString)
+    } catch (e) {
+      // no minted coins yet
+    }
+
+    this.mintedCoins = mints
+    return mints
+  }
+
+  // TODO: change json struct
+  async writeMintedCoins(mints: PrivateCoin[]) {
+    const json = JSON.stringify(mints)
+    await this.encryptedLocalDisklet.setText(SIGMA_ENCRYPTED_FILE, json)
+    this.mintedCoins = mints
+
+    logger.info(
+      'zcoinEngineExtension -> zcoinStateExtension -> writeMintedCoins',
+      this.mintedCoins
+    )
+    return this.mintedCoins
+  }
+
+  async appendMintedCoins(coins: PrivateCoin[]): Promise<PrivateCoin[]> {
+    logger.info(
+      'zcoinEngineExtension -> zcoinStateExtension -> appendMintedCoins called'
+    )
+
+    const newMintedCoins = [...this.mintedCoins, ...coins]
+
+    const wroteCoins = await this.writeMintedCoins(newMintedCoins)
+    return wroteCoins
+  }
+
+  async updateSpendCoins(coins: SpendCoin[], txid: string) {
+    const mints = this.mintedCoins
+    coins.forEach(coin => {
+      for (let i = 0; i < mints.length; ++i) {
+        const mint = mints[i]
+        if (mint.index === coin.index) {
+          mint.isSpend = true
+          mint.spendTxId = txid
+          mint.groupId = coin.groupId
+          break
+        }
+      }
+    })
+
+    this.writeMintedCoins(mints)
   }
 
   wakeUpConnections() {
