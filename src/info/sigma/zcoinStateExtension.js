@@ -6,9 +6,9 @@ import { EngineState } from '../../engine/engineState'
 import { EngineStateExtension } from '../../engine/engineStateExtension'
 import type { StratumTask } from '../../stratum/stratumConnection'
 import { logger } from '../../utils/logger'
+import type { PrivateCoin } from '../zcoins'
+import { SIGMA_ENCRYPTED_FILE } from '../zcoins'
 import { type SpendCoin } from './coinUtils'
-import type { PrivateCoin } from './flowTypes'
-import { SIGMA_ENCRYPTED_FILE } from './flowTypes'
 import {
   fetchTransactionVerbose,
   getAnonymitySet,

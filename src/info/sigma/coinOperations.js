@@ -3,7 +3,7 @@
 import { bns } from 'biggystring'
 import { InsufficientFundsError } from 'edge-core-js/types'
 
-import { type PrivateCoin, denominations } from './flowTypes'
+import { type PrivateCoin, denominations } from '../zcoins'
 
 const getRequiredMintCountForValue = (value: string): number => {
   let result = 0

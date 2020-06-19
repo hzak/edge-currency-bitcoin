@@ -18,6 +18,8 @@ import type { PluginIo } from '../../plugin/pluginIo'
 import { getReceiveAddresses, sumUtxos } from '../../utils/coinUtils'
 import type { TxOptions } from '../../utils/coinUtils.js'
 import { logger } from '../../utils/logger'
+import type { PrivateCoin } from '../zcoins'
+import { denominations, OP_SIGMA_MINT, RESTORE_FILE } from '../zcoins'
 import { getMintsToSpend } from './coinOperations'
 import {
   createPrivateCoin,
@@ -28,8 +30,6 @@ import {
   sumTransaction
 } from './coinUtils'
 import type { SpendCoin } from './coinUtils.js'
-import type { PrivateCoin } from './flowTypes'
-import { denominations, OP_SIGMA_MINT, RESTORE_FILE } from './flowTypes'
 import { ZcoinStateExtension } from './zcoinStateExtension'
 
 const MILLI_TO_SEC = 1000
