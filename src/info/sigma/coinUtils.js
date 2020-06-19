@@ -10,13 +10,13 @@ import { toNewFormat } from '../../utils/addressFormat.js'
 import type { BlockHeight, StandardOutput, Utxo } from '../../utils/coinUtils'
 import { toBcoinFormat } from '../../utils/coinUtils'
 import { logger } from '../../utils/logger'
-import type { PrivateCoin } from './flowTypes'
+import type { PrivateCoin } from '../zcoins'
 import {
   denominations,
   OP_SIGMA_MINT,
   OP_SIGMA_SPEND,
   SIGMA_COIN
-} from './flowTypes'
+} from '../zcoins'
 
 export type SpendCoin = {
   value: number,
