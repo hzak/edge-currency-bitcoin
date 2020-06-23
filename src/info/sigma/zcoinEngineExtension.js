@@ -19,7 +19,7 @@ import { getReceiveAddresses, sumUtxos } from '../../utils/coinUtils'
 import type { TxOptions } from '../../utils/coinUtils.js'
 import { logger } from '../../utils/logger'
 import type { PrivateCoin } from '../zcoins'
-import { denominations, OP_SIGMA_MINT, RESTORE_FILE } from '../zcoins'
+import { DENOMINATIONS, OP_SIGMA_MINT, RESTORE_FILE } from '../zcoins'
 import { getMintsToSpend } from './coinOperations'
 import {
   createPrivateCoin,
@@ -55,8 +55,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async load(currencyEngine: CurrencyEngine) {
-    logger.info('zcoinEngineExtension -> load called')
-
     this.currencyEngine = currencyEngine
     this.engineState = this.currencyEngine.engineState
     this.walletLocalEncryptedDisklet = this.currencyEngine.walletLocalEncryptedDisklet
@@ -78,7 +76,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   onTxFetched(txid: string) {
-    logger.info(`zcoinEngineExtension -> onTxFetched called txId ${txid}`)
     if (txid in this.savedSpendTransactionValues) {
       const edgeTransaction = this.getSpendTransactionSync(
         txid,
@@ -95,8 +92,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   onBalanceChanged() {
-    logger.info('zcoinEngineExtension -> onBalanceChanged called')
-
     this.currencyEngine.callbacks.onBalanceChanged(
       this.currencyEngine.currencyCode,
       this.engineState.getBalance({ mintedBalance: true })
@@ -104,8 +99,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async saveTx(edgeTransaction: EdgeTransaction) {
-    logger.info('zcoinEngineExtension -> saveTx called')
-
     const { otherParams = {}, txid = '' } = edgeTransaction
     const {
       mintsForSave = [],
@@ -122,8 +115,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async loop() {
-    logger.info('zcoinEngineExtension -> loop called')
-
     const restored = await this.restore()
     if (!restored) {
       return
@@ -132,17 +123,15 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     // TODO: can move into newTx
     const utxos = this.engineState.getUTXOs()
     const needToMint = sumUtxos(utxos)
-    logger.info('zcoinEngineExtension -> Not minted balance: ' + needToMint)
     let needToMintStr = needToMint.toString()
-    if (bns.gt(needToMintStr, denominations[0])) {
+    if (bns.gt(needToMintStr, DENOMINATIONS[0])) {
       if (
-        bns.mul(bns.div(needToMintStr, denominations[0]), denominations[0]) ===
+        bns.mul(bns.div(needToMintStr, DENOMINATIONS[0]), DENOMINATIONS[0]) ===
         needToMintStr
       ) {
         // can't mint all balance, because of fee
-        needToMintStr = bns.sub(needToMintStr, denominations[0])
+        needToMintStr = bns.sub(needToMintStr, DENOMINATIONS[0])
       }
-      logger.info('zcoinEngineExtension -> Trying to mint: ' + needToMintStr)
       const edgeInfo: EdgeSpendInfo = {
         currencyCode: 'XZC',
         spendTargets: [
@@ -155,14 +144,13 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       await this.mint(edgeInfo)
     }
 
-    await this.getMintMetadataLoop()
-
-    this.onBalanceChanged()
+    const updated = await this.updateMintMetadata()
+    if (updated) {
+      this.onBalanceChanged()
+    }
   }
 
   async restore(): Promise<boolean> {
-    logger.info('zcoinEngineExtension -> restore')
-
     try {
       const restoreJsonStr = await this.walletLocalEncryptedDisklet.getText(
         RESTORE_FILE
@@ -171,7 +159,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         return true
       }
     } catch (e) {
-      logger.error('zcoinEngineExtension -> something went wrong', e)
+      logger.error('something went wrong', e)
     }
 
     const mintData: PrivateCoin[] = []
@@ -206,7 +194,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         index,
         this.io
       )
-      logger.info('zcoinEngineExtension -> restore coin ', coin)
       const isSpend = usedSerialNumbers.includes(coin.serialNumber)
       for (const coinInfo of latestCoinIds) {
         if (coinInfo.anonymitySet.includes(coin.commitment)) {
@@ -226,14 +213,13 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     }
 
     try {
-      logger.info('zcoinEngineExtension -> restore try save ', mintData)
       await this.zcoinStateExtensions.writeMintedCoins(mintData)
       await this.walletLocalEncryptedDisklet.setText(
         RESTORE_FILE,
         JSON.stringify({ restored: true })
       )
-      logger.info('zcoinEngineExtension -> restored')
     } catch (e) {
+      logger.error('something went wrong', e)
       return false
     }
 
@@ -270,22 +256,20 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async mint(edgeSpendInfo: EdgeSpendInfo) {
-    let tx = null
-    let promise = null
+    let mintTx: ?EdgeTransaction = null
     let tryAgain = true
     while (tryAgain) {
       tryAgain = false
       try {
-        promise = this.makeMint(edgeSpendInfo)
-        tx = await promise
+        mintTx = await this.makeMint(edgeSpendInfo)
       } catch (e) {
-        logger.info('zcoinEngineExtension -> mint tx: Error ', e)
+        logger.error('cannot mint', e)
         if (e.message === 'InsufficientFundsError') {
           const amount = edgeSpendInfo.spendTargets[0].nativeAmount || '0'
-          if (bns.gt(amount, denominations[0])) {
+          if (bns.gt(amount, DENOMINATIONS[0])) {
             edgeSpendInfo.spendTargets[0].nativeAmount = bns.sub(
               amount,
-              denominations[0]
+              DENOMINATIONS[0]
             )
             tryAgain = true
           } else {
@@ -296,21 +280,16 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         }
       }
     }
-    if (tx == null) {
+    if (mintTx == null) {
       return
     }
 
     try {
-      promise = this.currencyEngine.signTx(tx)
-      tx = await promise
-      promise = this.currencyEngine.broadcastTx(tx)
-      tx = await promise
-
-      promise = this.currencyEngine.saveTx(tx)
-      await promise
-      logger.info('zcoinEngineExtension -> mint tx: ', tx)
+      const signTx = await this.currencyEngine.signTx(mintTx)
+      const broadcastTx = await this.currencyEngine.broadcastTx(signTx)
+      await this.currencyEngine.saveTx(broadcastTx)
     } catch (e) {
-      logger.error('zcoinEngineExtension -> something went wrong ', e)
+      logger.error('something went wrong ', e)
     }
   }
 
@@ -433,16 +412,15 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       }
       return edgeTransaction
     } catch (e) {
-      logger.error('mint tx: ', e)
+      logger.error('cannot mint', e)
       if (e.type === 'FundingError') throw new Error('InsufficientFundsError')
       throw e
     }
   }
 
-  async getMintMetadataLoop() {
-    logger.info('zcoinEngineExtension -> getMintMetadataLoop')
-
+  async updateMintMetadata(): Promise<boolean> {
     // get saved mint data
+    let flag = false
     const mintData: PrivateCoin[] = this.zcoinStateExtensions.mintedCoins
 
     // process mints
@@ -460,21 +438,23 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         mintsToRetrieve
       )
       retrievedData.forEach(data => {
-        mintsToUpdate[data.pubcoin].groupId =
+        const passHeightLimit =
           this.currencyEngine.getBlockHeight() - data.height >= 5
-            ? data.groupId
-            : -1
+        flag = flag || passHeightLimit
+        mintsToUpdate[data.pubcoin].groupId = passHeightLimit
+          ? data.groupId
+          : -1
       })
       await this.zcoinStateExtensions.writeMintedCoins(mintData)
     }
+
+    return flag
   }
 
   async makeSpend(
     edgeSpendInfo: EdgeSpendInfo,
     txOptions?: TxOptions = {}
   ): Promise<EdgeTransaction> {
-    logger.info('zcoinEngineExtension -> makeSpend called')
-
     const { spendTargets } = edgeSpendInfo
     // Can't spend without outputs
     if (!txOptions.CPFP && (!spendTargets || spendTargets.length < 1)) {
@@ -488,7 +468,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
     const mintData: PrivateCoin[] = this.zcoinStateExtensions.mintedCoins
     const currentMaxIndex = this.zcoinStateExtensions.getLastPrivateCoinIndex()
-    logger.info('zcoinEngineExtension -> spend mintData = ', mintData)
 
     const approvedMints: PrivateCoin[] = []
     mintData.forEach(info => {
@@ -506,12 +485,10 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     // }
 
     const remainder = totalAmountToSend || '0'
-    logger.info('zcoinEngineExtension -> spend remainder before ', remainder)
     const mintsToBeSpend: PrivateCoin[] = getMintsToSpend(
       approvedMints,
       remainder
     )
-    logger.info('zcoinEngineExtension -> mintsToBeSpend', mintsToBeSpend)
     if (mintsToBeSpend.length === 0) {
       throw new Error('InsufficientFundsError')
     }
@@ -528,7 +505,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         groupId: info.groupId
       })
     }
-    logger.info('zcoinEngineExtension -> mints to be spend', mintsToBeSpend)
 
     try {
       // Get the rate according to the latest fee
@@ -622,9 +598,9 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         signedTx: ''
       }
 
-      logger.info('zcoinEngineExtension -> spend 2', edgeTransaction)
       return edgeTransaction
     } catch (e) {
+      logger.error('cannot spend', e)
       if (e.type === 'FundingError') throw new Error('InsufficientFundsError')
       throw e
     }
@@ -632,7 +608,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
   async signTx(edgeTransaction: EdgeTransaction): Promise<?EdgeTransaction> {
     const { isSpend = false } = edgeTransaction.otherParams || {}
-    logger.info('zcoinEngineExtension -> signTx called is spend = ', isSpend)
     if (!isSpend) {
       return null
     }
@@ -656,7 +631,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     }
 
     const bTx = parseJsonTransactionForSpend(txJson)
-    logger.info('zcoinEngineExtension -> spend&mint: spend transaction', spends)
 
     const { signedTx, txid, mintsForSave } = await signSpendTX(
       bTx,
@@ -667,7 +641,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       this.io
     )
 
-    logger.info('zcoinEngineExtension -> spend&mint retrievedData', signedTx)
     return {
       ...edgeTransaction,
       otherParams: {
@@ -682,7 +655,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   getTransactionSync(txid: string): EdgeTransaction {
-    logger.info('zcoinEngineExtension -> getTransactionSync called')
     const spendTransactionValues = this.getSpendTransactionValues()
     return this.getSpendTransactionSync(txid, spendTransactionValues[txid])
   }

@@ -12,7 +12,7 @@ import { toBcoinFormat } from '../../utils/coinUtils'
 import { logger } from '../../utils/logger'
 import type { PrivateCoin } from '../zcoins'
 import {
-  denominations,
+  DENOMINATIONS,
   OP_SIGMA_MINT,
   OP_SIGMA_SPEND,
   SIGMA_COIN
@@ -76,8 +76,8 @@ const createEmptyMintCommitmentsForValue = async (value: string) => {
   logger.info('mint createEmptyMintCommitmentsForValue:', value)
   const result: Array<PrivateCoin> = []
   const emptyCommitment = repeatString(36, OP_SIGMA_MINT)
-  for (let i = denominations.length - 1; i >= 0; i--) {
-    const denom = denominations[i]
+  for (let i = DENOMINATIONS.length - 1; i >= 0; i--) {
+    const denom = DENOMINATIONS[i]
 
     while (bns.gte(value, denom)) {
       value = bns.sub(value, denom)
@@ -109,8 +109,8 @@ export const getMintCommitmentsForValue = async (
     currentIndex
   )
   const result: Array<PrivateCoin> = []
-  for (let i = denominations.length - 1; i >= 0; i--) {
-    const denom = denominations[i]
+  for (let i = DENOMINATIONS.length - 1; i >= 0; i--) {
+    const denom = DENOMINATIONS[i]
 
     while (bns.gte(value, denom)) {
       value = bns.sub(value, denom)

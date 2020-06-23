@@ -15,7 +15,7 @@ export const OP_SIGMA_SPEND = 'c4'
 
 export const SIGMA_COIN = 100000000
 
-export const denominations = [
+export const DENOMINATIONS = [
   '5000000',
   '10000000',
   '50000000',

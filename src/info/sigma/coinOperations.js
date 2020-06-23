@@ -3,13 +3,13 @@
 import { bns } from 'biggystring'
 import { InsufficientFundsError } from 'edge-core-js/types'
 
-import { type PrivateCoin, denominations } from '../zcoins'
+import { type PrivateCoin, DENOMINATIONS } from '../zcoins'
 
 const getRequiredMintCountForValue = (value: string): number => {
   let result = 0
-  for (let i = denominations.length - 1; i >= 0; --i) {
-    while (bns.gte(value, denominations[i])) {
-      value = bns.sub(value, denominations[i])
+  for (let i = DENOMINATIONS.length - 1; i >= 0; --i) {
+    while (bns.gte(value, DENOMINATIONS[i])) {
+      value = bns.sub(value, DENOMINATIONS[i])
       result++
     }
   }
@@ -23,8 +23,8 @@ export const getMintsToSpend = (
   spendValue: string
 ): PrivateCoin[] => {
   // calculate required and max check values in count of min denom
-  const minValueCoin = denominations[0]
-  const minValueCoinNumber = parseInt(denominations[0])
+  const minValueCoin = DENOMINATIONS[0]
+  const minValueCoinNumber = parseInt(DENOMINATIONS[0])
   const minValueCoinsRequiredStr = bns.div(spendValue, minValueCoin)
   let minValueCoinsRequired = parseInt(minValueCoinsRequiredStr)
   if (bns.gt(spendValue, bns.mul(minValueCoinsRequiredStr, minValueCoin))) {
@@ -32,7 +32,7 @@ export const getMintsToSpend = (
   }
   const maxCheckValue =
     minValueCoinsRequired +
-    parseInt(denominations[denominations.length - 1]) / minValueCoinNumber
+    parseInt(DENOMINATIONS[DENOMINATIONS.length - 1]) / minValueCoinNumber
 
   // sort approved mints in value descending order and if value is same than sort in index descending order
   approvedMints.sort((c1, c2) => {

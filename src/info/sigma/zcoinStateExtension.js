@@ -94,7 +94,6 @@ export class ZcoinStateExtension implements EngineStateExtension {
   }
 
   pickNextTask(uri: string, stratumVersion: string): StratumTask | void {
-    logger.info('zcoinEngineExtension -> zcoinStateExtension -> pickNextTask')
     const serverState = this.engineState.serverStates[uri]
     const prefix = `${this.engineState.walletId} ${uri.replace(
       'electrum://',
@@ -108,7 +107,7 @@ export class ZcoinStateExtension implements EngineStateExtension {
         return fetchTransactionVerbose(
           txid,
           txData => {
-            logger.info(`${prefix} ** RECEIVED VERBOSE TX ** ${txid}`)
+            logger.info(`${prefix} ** RECEIVED MISSING VERBOSE TX ** ${txid}`)
             this.engineState.pluginState.serverScoreUp(
               uri,
               Date.now() - queryTime
@@ -153,9 +152,6 @@ export class ZcoinStateExtension implements EngineStateExtension {
   }
 
   requestMintsFromStratum(uri: string, stratumVersion: string) {
-    logger.info(
-      'zcoinEngineExtension -> zcoinStateExtension -> requestMintsFromStratum'
-    )
     if (!this.mintsToRetrieve) {
       return
     }
@@ -167,10 +163,6 @@ export class ZcoinStateExtension implements EngineStateExtension {
         return { denom: info.denom, pubcoin: info.pubcoin }
       }),
       result => {
-        logger.info(
-          'zcoinEngineExtension -> zcoinStateExtension -> getMintMetadata: ' +
-            JSON.stringify(result)
-        )
         this.retrievedMints = mints.map((info, index) => {
           const response = result[index]
           let groupId = -1
@@ -199,9 +191,6 @@ export class ZcoinStateExtension implements EngineStateExtension {
   }
 
   requestAnonymitySetFromStratum(uri: string, stratumVersion: string) {
-    logger.info(
-      'zcoinEngineExtension -> zcoinStateExtension -> requestAnonymitySetFromStratum'
-    )
     if (!this.anonymitySetToRetrieve) {
       return
     }
@@ -213,10 +202,6 @@ export class ZcoinStateExtension implements EngineStateExtension {
       denom,
       groupId + '',
       result => {
-        logger.info(
-          'zcoinEngineExtension -> zcoinStateExtension -> getAnonymitySet: ' +
-            JSON.stringify(result)
-        )
         this.retrievedAnonymitySet = result
       },
       (e: Error) => {
@@ -235,16 +220,9 @@ export class ZcoinStateExtension implements EngineStateExtension {
   }
 
   requestUsedSerialsFromStratum(uri: string, stratumVersion: string) {
-    logger.info(
-      'zcoinEngineExtension -> zcoinStateExtension -> requestUsedSerialsFromStratum'
-    )
     this.retrievedUsedSerials = false
     return getUsedCoinSerials(
       result => {
-        logger.info(
-          'zcoinEngineExtension -> zcoinStateExtension -> getUsedCoinSerials: ' +
-            JSON.stringify(result)
-        )
         this.usedSerials = result
       },
       (e: Error) => {
@@ -263,16 +241,9 @@ export class ZcoinStateExtension implements EngineStateExtension {
   }
 
   requestCoinGroupFromStratum(uri: string, stratumVersion: string) {
-    logger.info(
-      'zcoinEngineExtension -> zcoinStateExtension -> requestCoinGroupFromStratum'
-    )
     this.retrievedCoinGroup = false
     return getLatestCoinIds(
       result => {
-        logger.info(
-          'zcoinEngineExtension -> zcoinStateExtension -> getLatestCoinIds: ' +
-            JSON.stringify(result)
-        )
         this.coinGroup = result
       },
       (e: Error) => {
@@ -382,13 +353,9 @@ export class ZcoinStateExtension implements EngineStateExtension {
       const jsonString = await this.encryptedLocalDisklet.getText(
         SIGMA_ENCRYPTED_FILE
       )
-      logger.info(
-        'zcoinEngineExtension -> zcoinStateExtension -> loadMintedCoins: ',
-        jsonString
-      )
       mints = JSON.parse(jsonString)
     } catch (e) {
-      // no minted coins yet
+      logger.error('something went wrong ', e)
     }
 
     this.mintedCoins = mints
@@ -401,18 +368,10 @@ export class ZcoinStateExtension implements EngineStateExtension {
     await this.encryptedLocalDisklet.setText(SIGMA_ENCRYPTED_FILE, json)
     this.mintedCoins = mints
 
-    logger.info(
-      'zcoinEngineExtension -> zcoinStateExtension -> writeMintedCoins',
-      this.mintedCoins
-    )
     return this.mintedCoins
   }
 
   async appendMintedCoins(coins: PrivateCoin[]): Promise<PrivateCoin[]> {
-    logger.info(
-      'zcoinEngineExtension -> zcoinStateExtension -> appendMintedCoins called'
-    )
-
     const newMintedCoins = [...this.mintedCoins, ...coins]
 
     const wroteCoins = await this.writeMintedCoins(newMintedCoins)
