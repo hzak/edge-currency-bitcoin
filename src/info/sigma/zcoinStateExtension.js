@@ -6,8 +6,11 @@ import { EngineState } from '../../engine/engineState'
 import { EngineStateExtension } from '../../engine/engineStateExtension'
 import type { StratumTask } from '../../stratum/stratumConnection'
 import { logger } from '../../utils/logger'
-import type { PrivateCoin } from '../zcoins'
-import { SIGMA_ENCRYPTED_FILE } from '../zcoins'
+import {
+  type PrivateCoin,
+  asPrivateCoinArray,
+  SIGMA_ENCRYPTED_FILE
+} from '../zcoins'
 import { type SpendCoin } from './coinUtils'
 import {
   fetchTransactionVerbose,
@@ -353,7 +356,7 @@ export class ZcoinStateExtension implements EngineStateExtension {
       const jsonString = await this.encryptedLocalDisklet.getText(
         SIGMA_ENCRYPTED_FILE
       )
-      mints = JSON.parse(jsonString)
+      mints = asPrivateCoinArray(jsonString)
     } catch (e) {
       logger.error('something went wrong ', e)
     }

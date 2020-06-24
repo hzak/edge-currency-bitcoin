@@ -1,5 +1,6 @@
 // @flow
 
+import { asArray, asBoolean, asNumber, asObject, asString } from 'cleaners'
 import { type EdgeCurrencyInfo } from 'edge-core-js/types'
 
 import type { EngineCurrencyInfo } from '../engine/currencyEngine.js'
@@ -25,15 +26,19 @@ export const DENOMINATIONS = [
   '10000000000'
 ]
 
-export type PrivateCoin = {
-  value: number,
-  index: number,
-  commitment: string,
-  serialNumber: string,
-  groupId: number,
-  isSpend: boolean,
-  spendTxId: string
-}
+export const asPrivateCoin = asObject({
+  value: asNumber,
+  index: asNumber,
+  commitment: asString,
+  serialNumber: asString,
+  groupId: asNumber,
+  isSpend: asBoolean,
+  spendTxId: asString
+})
+
+export const asPrivateCoinArray = asArray(asPrivateCoin)
+
+export type PrivateCoin = $Call<typeof asPrivateCoin>
 
 const bcoinInfo: BcoinCurrencyInfo = {
   type: 'zcoins',

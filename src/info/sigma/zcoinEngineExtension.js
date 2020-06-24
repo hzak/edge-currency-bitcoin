@@ -91,13 +91,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     }
   }
 
-  onBalanceChanged() {
-    this.currencyEngine.callbacks.onBalanceChanged(
-      this.currencyEngine.currencyCode,
-      this.engineState.getBalance({ mintedBalance: true })
-    )
-  }
-
   async saveTx(edgeTransaction: EdgeTransaction) {
     const { otherParams = {}, txid = '' } = edgeTransaction
     const {
@@ -146,7 +139,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
     const updated = await this.updateMintMetadata()
     if (updated) {
-      this.onBalanceChanged()
+      this.currencyEngine.onBalanceChanged()
     }
   }
 
