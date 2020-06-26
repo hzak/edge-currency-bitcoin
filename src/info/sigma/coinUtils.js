@@ -68,12 +68,11 @@ export const createPrivateCoin = async (
   }
 }
 
-const repeatString = (lenght: number, str: string): string => {
-  return new Array(lenght).join(str)
+const repeatString = (length: number, str: string): string => {
+  return new Array(length).join(str)
 }
 
 const createEmptyMintCommitmentsForValue = async (value: string) => {
-  logger.info('mint createEmptyMintCommitmentsForValue:', value)
   const result: Array<PrivateCoin> = []
   const emptyCommitment = repeatString(36, OP_SIGMA_MINT)
   for (let i = DENOMINATIONS.length - 1; i >= 0; i--) {
@@ -102,12 +101,6 @@ export const getMintCommitmentsForValue = async (
   currentIndex: number,
   io: PluginIo
 ) => {
-  logger.info(
-    'mint getMintCommitmentsForValue:',
-    value,
-    privateKey,
-    currentIndex
-  )
   const result: Array<PrivateCoin> = []
   for (let i = DENOMINATIONS.length - 1; i >= 0; i--) {
     const denom = DENOMINATIONS[i]
@@ -139,14 +132,6 @@ const fillSpendScriptIntoTX = async (
 
   for (let i = 0; i < mints.length; i++) {
     const mint = mints[i]
-    logger.info(
-      'spend tx fillSpendScriptIntoTX mint = ',
-      mint,
-      ' index = ',
-      i,
-      ' value = ',
-      mint.value / SIGMA_COIN
-    )
 
     const spendProof = await io.sigmaSpend({
       denomination: mint.value / SIGMA_COIN,
@@ -186,7 +171,6 @@ export const createSpendTX = async ({
   const { address, value } = outputs[0]
   const bcoinAddress = toBcoinFormat(address, network)
   const addressScript = script.fromAddress(bcoinAddress)
-  logger.info('spend ', address, value)
 
   // create transaction
   const cb = new primitives.MTX().fromOptions({ locktime: 126395 })
@@ -214,7 +198,6 @@ export const createSpendTX = async ({
 
   const proof = Buffer.from(repeatString(1321, OP_SIGMA_SPEND), 'hex')
   mints.forEach(mint => {
-    logger.info('spend mint = ', proof)
     cb.addInput({
       prevout: new primitives.Outpoint().fromOptions({
         hash:
@@ -281,7 +264,12 @@ export const sumTransaction = (
   network: string,
   engineState: EngineState,
   spendValue: number
-) => {
+): {
+  nativeAmount: number,
+  fee: number,
+  ourReceiveAddresses: string[],
+  isMint: boolean
+} => {
   const ourReceiveAddresses = []
   let totalOutputAmount = 0
   let totalInputAmount = 0

@@ -358,7 +358,7 @@ export class ZcoinStateExtension implements EngineStateExtension {
       )
       mints = asPrivateCoinArray(jsonString)
     } catch (e) {
-      logger.error('something went wrong ', e)
+      logger.error('loadMintedCoins', e)
     }
 
     this.mintedCoins = mints

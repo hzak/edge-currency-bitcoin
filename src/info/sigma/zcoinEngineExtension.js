@@ -152,7 +152,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         return true
       }
     } catch (e) {
-      logger.error('something went wrong', e)
+      logger.error('restore', e)
     }
 
     const mintData: PrivateCoin[] = []
@@ -212,7 +212,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         JSON.stringify({ restored: true })
       )
     } catch (e) {
-      logger.error('something went wrong', e)
+      logger.error('restore', e)
       return false
     }
 
@@ -236,7 +236,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       // $FlowFixMe
       await this[looperMethod]()
     } catch (e) {
-      logger.error('Error in Loop:', looperMethod, e)
+      logger.error('addLooperMethodToLoop', looperMethod, e)
     }
     if (this.canRunLoop) {
       this.looperMethods[looperMethod] = setTimeout(() => {
@@ -256,7 +256,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       try {
         mintTx = await this.makeMint(edgeSpendInfo)
       } catch (e) {
-        logger.error('cannot mint', e)
+        logger.error('mint', e)
         if (e.message === 'InsufficientFundsError') {
           const amount = edgeSpendInfo.spendTargets[0].nativeAmount || '0'
           if (bns.gt(amount, DENOMINATIONS[0])) {
@@ -282,7 +282,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       const broadcastTx = await this.currencyEngine.broadcastTx(signTx)
       await this.currencyEngine.saveTx(broadcastTx)
     } catch (e) {
-      logger.error('something went wrong ', e)
+      logger.error('mint', e)
     }
   }
 
@@ -405,7 +405,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       }
       return edgeTransaction
     } catch (e) {
-      logger.error('cannot mint', e)
+      logger.error('makeMint', e)
       if (e.type === 'FundingError') throw new Error('InsufficientFundsError')
       throw e
     }
@@ -488,8 +488,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
     const spendCoins: SpendCoin[] = []
     for (const info of mintsToBeSpend) {
-      // const retrievedData = await this.engineState.retrieveAnonymitySet(info.value, info.groupId)
-      // logger.info('zcoinEngineExtension -> retrieveAnonymitySet retrievedData', retrievedData)
       spendCoins.push({
         value: info.value,
         anonymitySet: [], // retrievedData.serializedCoins,
@@ -593,7 +591,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
       return edgeTransaction
     } catch (e) {
-      logger.error('cannot spend', e)
+      logger.error('makeSpend', e)
       if (e.type === 'FundingError') throw new Error('InsufficientFundsError')
       throw e
     }
