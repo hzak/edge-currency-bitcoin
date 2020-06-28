@@ -12,6 +12,7 @@ import { toBcoinFormat } from '../../utils/coinUtils'
 import { logger } from '../../utils/logger'
 import type { PrivateCoin } from '../zcoins'
 import {
+  DEBUG_ZCOINS,
   DENOMINATIONS,
   OP_SIGMA_MINT,
   OP_SIGMA_SPEND,
@@ -38,6 +39,12 @@ export type CreateSpendTxOptions = {
   io: PluginIo,
   privateKey: string,
   currentIndex: number
+}
+
+export const logInfoZcoins = (...data: any[]): void => {
+  if (DEBUG_ZCOINS) {
+    logger.info(data)
+  }
 }
 
 const hexFromArray = (array: Buffer): string => {

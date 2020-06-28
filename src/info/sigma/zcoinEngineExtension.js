@@ -25,6 +25,7 @@ import {
   createPrivateCoin,
   createSpendTX,
   getMintCommitmentsForValue,
+  logInfoZcoins,
   parseJsonTransactionForSpend,
   signSpendTX,
   sumTransaction
@@ -62,6 +63,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     this.io = this.currencyEngine.io
 
     this.runLooperIfNeed()
+    logInfoZcoins('zcoins -> loaded')
   }
 
   async resyncBlockchain() {
@@ -108,6 +110,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async loop() {
+    logInfoZcoins('zcoins -> loop called')
     const restored = await this.restore()
     if (!restored) {
       return
