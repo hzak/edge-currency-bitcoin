@@ -356,7 +356,7 @@ export class ZcoinStateExtension implements EngineStateExtension {
       const jsonString = await this.encryptedLocalDisklet.getText(
         SIGMA_ENCRYPTED_FILE
       )
-      mints = asPrivateCoinArray(jsonString)
+      mints = asPrivateCoinArray(JSON.parse(jsonString))
     } catch (e) {
       logger.error('loadMintedCoins', e)
     }
