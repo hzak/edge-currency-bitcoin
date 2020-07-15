@@ -317,6 +317,34 @@ export class KeyManager {
   // ////////////// Private API /////////////////// //
   // ////////////////////////////////////////////// //
 
+  async getPrivateKeyForAddress(address: string): Object {
+    logger.info(`PRIVATE KEYS 1 = ${JSON.stringify(this.keys)}`)
+    if (!this.keys.master.privKey && this.seed === '') {
+      throw new Error("Can't sign without private key")
+    }
+    await this.initMasterKeys()
+    const { addressInfos, scriptHashes } = this.engineState
+    if (!address) throw new Error('Missing address to sign with')
+    const scriptHash = scriptHashes[address]
+    if (!scriptHash) throw new Error('Address is not part of this wallet')
+    const addressInfo = addressInfos[scriptHash]
+    if (!addressInfo) throw new Error('Address is not part of this wallet')
+    const { path } = addressInfo
+    const pathSuffix = path.split(this.masterPath + '/')[1]
+    const branch: string = pathSuffix.split('/')[0]
+    const branchName = this.fSelector.branches[`${branch}`]
+    const keyRing = this.keys[branchName]
+    if (!keyRing.privKey) {
+      keyRing.privKey = await this.fSelector.deriveHdKey(
+        this.keys.master.privKey,
+        parseInt(branch)
+      )
+      this.saveKeysToCache()
+    }
+    logger.info(`PRIVATE KEYS 2 = ${JSON.stringify(this.keys)}`)
+    return keyRing.privKey
+  }
+
   async getKeyForAddress(address: string): Object {
     if (!this.keys.master.privKey && this.seed === '') {
       throw new Error("Can't sign without private key")

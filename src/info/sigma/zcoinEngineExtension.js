@@ -625,12 +625,15 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     }
 
     const bTx = parseJsonTransactionForSpend(txJson)
+    const privateKey = this.keyManager.getPrivateKeyForAddress(
+      this.keyManager.getChangeAddress()
+    )
 
     const { signedTx, txid, mintsForSave } = await signSpendTX(
       bTx,
       value,
       currentIndex,
-      this.currencyEngine.walletInfo.keys.dataKey,
+      privateKey.toString(),
       spends,
       this.io
     )
