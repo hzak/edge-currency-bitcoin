@@ -22,6 +22,7 @@ import type { PrivateCoin } from '../zcoins'
 import { DENOMINATIONS, OP_SIGMA_MINT, RESTORE_FILE } from '../zcoins'
 import { getMintsToSpend } from './coinOperations'
 import {
+  createMintBranchPrivateKey,
   createPrivateCoin,
   createSpendTX,
   getMintCommitmentsForValue,
@@ -47,6 +48,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
 
   canRunLoop: boolean
   looperMethods: any
+  privateKey: any
 
   constructor() {
     this.savedSpendTransactionValues = {}
@@ -177,13 +179,15 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       }
     }
 
+    const privateKey = await this.getMintBranchPrivateKey()
+
     let counter = 0
     let index = -1
     while (counter++ < 100 && index++ < commitmentCount) {
       // commitment is only dependant to private key and index, that's why coin value is hardcoded
       const coin = await createPrivateCoin(
         100000000,
-        this.currencyEngine.walletInfo.keys.dataKey,
+        privateKey,
         index,
         this.io
       )
@@ -326,9 +330,10 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         } = spendTarget
         const balance = nativeAmount || '0'
 
+        const privateKey = await this.getMintBranchPrivateKey()
         mints = await getMintCommitmentsForValue(
           balance,
-          this.currencyEngine.walletInfo.keys.dataKey,
+          privateKey,
           currentMaxIndex,
           this.io
         )
@@ -530,6 +535,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       )
 
       // TODO: remove mints: mintedInTx not need
+      const privateKey = await this.getMintBranchPrivateKey()
       const {
         tx: bcoinTx,
         mints: mintedInTx,
@@ -543,7 +549,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         utxos,
         height: this.currencyEngine.getBlockHeight(),
         io: this.io,
-        privateKey: this.currencyEngine.walletInfo.keys.dataKey,
+        privateKey: privateKey,
         currentIndex: currentMaxIndex,
         changeAddress: this.keyManager.getChangeAddress(),
         estimate: prev => this.keyManager.fSelector.estimateSize(prev),
@@ -622,12 +628,13 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     }
 
     const bTx = parseJsonTransactionForSpend(txJson)
+    const privateKey = await this.getMintBranchPrivateKey()
 
     const { signedTx, txid, mintsForSave } = await signSpendTX(
       bTx,
       value,
       currentIndex,
-      this.currencyEngine.walletInfo.keys.dataKey,
+      privateKey,
       spends,
       this.io
     )
@@ -674,7 +681,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       fee,
       ourReceiveAddresses,
       nativeAmount,
-      isMint: isSpecialTransaction
+      isMint: needCustomTxTitle
     } = sumTransaction(
       bcoinTransaction,
       this.currencyEngine.network,
@@ -689,7 +696,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       currencyCode: this.currencyEngine.currencyCode,
       otherParams: {
         debugInfo,
-        isSpecialTransaction
+        needCustomTxTitle
       },
       txid: txid,
       date: date,
@@ -723,5 +730,13 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         this.zcoinStateExtensions.handleNewTxid(item.spendTxId, true)
       }
     })
+  }
+
+  async getMintBranchPrivateKey() {
+    if (!this.privateKey) {
+      this.privateKey = await createMintBranchPrivateKey(this.keyManager)
+    }
+
+    return this.privateKey
   }
 }

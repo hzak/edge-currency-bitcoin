@@ -5,13 +5,15 @@ import { networks, primitives, script, txscript } from 'bcoin'
 import { bns } from 'biggystring'
 
 import type { EngineState } from '../../engine/engineState'
+import { KeyManager } from '../../engine/keyManager'
 import type { PluginIo } from '../../plugin/pluginIo'
 import { toNewFormat } from '../../utils/addressFormat.js'
 import type { BlockHeight, StandardOutput, Utxo } from '../../utils/coinUtils'
-import { toBcoinFormat } from '../../utils/coinUtils'
+import { getPrivateFromSeed, toBcoinFormat } from '../../utils/coinUtils'
 import { logger } from '../../utils/logger'
 import type { PrivateCoin } from '../zcoins'
 import {
+  BIP44_MINT_INDEX,
   DENOMINATIONS,
   OP_SIGMA_MINT,
   OP_SIGMA_SPEND,
@@ -40,21 +42,17 @@ export type CreateSpendTxOptions = {
   currentIndex: number
 }
 
-const hexFromArray = (array: Buffer): string => {
-  return Array.from(array, function(byte) {
-    return ('0' + (byte & 0xff).toString(16)).slice(-2)
-  }).join('')
-}
-
 export const createPrivateCoin = async (
   value: number,
   privateKey: string,
   index: number,
   io: PluginIo
 ): Promise<PrivateCoin> => {
+  const mintPrivateKey = await createPrivateKeyForIndex(privateKey, index)
+
   const { commitment, serialNumber } = await io.sigmaMint({
     denomination: value / SIGMA_COIN,
-    privateKey: hexFromArray(Buffer.from(privateKey, 'base64')),
+    privateKey: mintPrivateKey,
     index
   })
   return {
@@ -66,6 +64,21 @@ export const createPrivateCoin = async (
     isSpend: false,
     spendTxId: ''
   }
+}
+
+export const createMintBranchPrivateKey = async (
+  keyManager: KeyManager
+): Promise<string> => {
+  const path = keyManager.masterPath + '/' + BIP44_MINT_INDEX
+  const priv = await getPrivateFromSeed(keyManager.seed, keyManager.network)
+  const bip44Mint = await priv.derivePath(path)
+
+  return bip44Mint
+}
+
+export const createPrivateKeyForIndex = async (key: any, index: number) => {
+  const forIndex = await key.derive(index)
+  return forIndex.privateKey.toString('hex')
 }
 
 const repeatString = (length: number, str: string): string => {
@@ -97,7 +110,7 @@ const createEmptyMintCommitmentsForValue = async (value: string) => {
 
 export const getMintCommitmentsForValue = async (
   value: string,
-  privateKey: string,
+  privateKey: any,
   currentIndex: number,
   io: PluginIo
 ) => {
@@ -124,7 +137,7 @@ export const getMintCommitmentsForValue = async (
 const fillSpendScriptIntoTX = async (
   mints: SpendCoin[],
   value: number,
-  privateKey: string,
+  privateKey: any,
   io: PluginIo,
   mtx: MTX
 ) => {
@@ -133,9 +146,14 @@ const fillSpendScriptIntoTX = async (
   for (let i = 0; i < mints.length; i++) {
     const mint = mints[i]
 
+    const mintPrivateKey = await createPrivateKeyForIndex(
+      privateKey,
+      mint.index
+    )
+
     const spendProof = await io.sigmaSpend({
       denomination: mint.value / SIGMA_COIN,
-      privateKey: hexFromArray(Buffer.from(privateKey, 'base64')),
+      privateKey: mintPrivateKey,
       index: mint.index,
       anonymitySet: mint.anonymitySet,
       groupId: mint.groupId,
@@ -225,7 +243,7 @@ export const signSpendTX = async (
   tx: MTX,
   value: number,
   currentIndex: number,
-  privateKey: string,
+  privateKey: any,
   spendCoins: SpendCoin[],
   io: PluginIo
 ): Promise<{ txid: string, signedTx: string, mintsForSave: PrivateCoin[] }> => {
