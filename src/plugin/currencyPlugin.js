@@ -11,6 +11,7 @@ import {
   type EdgeCurrencyPlugin,
   type EdgeCurrencyTools,
   type EdgeEncodeUri,
+  type EdgeLog,
   type EdgeParsedUri,
   type EdgeWalletInfo
 } from 'edge-core-js/types'
@@ -45,7 +46,8 @@ export type CurrencyPluginFactorySettings = {
 
 export type CurrencyPluginSettings = {
   currencyInfo: EdgeCurrencyInfo,
-  engineInfo: EngineCurrencyInfo
+  engineInfo: EngineCurrencyInfo,
+  log: EdgeLog
 }
 
 /**
@@ -56,7 +58,7 @@ export type CurrencyPluginSettings = {
 export class CurrencyTools {
   currencyInfo: EdgeCurrencyInfo
   network: string
-  pluginName: string
+  pluginId: string
   io: PluginIo
   state: PluginState
 
@@ -65,7 +67,7 @@ export class CurrencyTools {
   // ------------------------------------------------------------------------
   constructor(
     io: PluginIo,
-    { currencyInfo, engineInfo }: CurrencyPluginSettings
+    { currencyInfo, engineInfo, log }: CurrencyPluginSettings
   ) {
     // Validate that we are a valid EdgeCurrencyTools:
     // eslint-disable-next-line no-unused-vars
@@ -73,17 +75,18 @@ export class CurrencyTools {
 
     // Public API:
     this.currencyInfo = currencyInfo
-    this.pluginName = currencyInfo.pluginName
+    this.pluginId = currencyInfo.pluginId
     // Private API:
     this.io = io
-    logger.info(`Creating Currency Plugin for ${this.pluginName}`)
+    logger.info(`Creating Currency Plugin for ${this.pluginId}`)
     this.network = engineInfo.network
-    const { defaultSettings, pluginName, currencyCode } = this.currencyInfo
+    const { defaultSettings, pluginId, currencyCode } = this.currencyInfo
     this.state = new PluginState({
       io,
       defaultSettings,
       currencyCode,
-      pluginName
+      pluginId,
+      log
     })
   }
 
@@ -171,7 +174,11 @@ const makeCurrencyPluginFactory = (
 
       makeCurrencyTools(): Promise<EdgeCurrencyTools> {
         if (toolsPromise != null) return toolsPromise
-        const tools = new CurrencyTools(io, { currencyInfo, engineInfo })
+        const tools = new CurrencyTools(io, {
+          currencyInfo,
+          engineInfo,
+          log: options.log
+        })
         toolsPromise = tools.state.load().then(() => tools)
         return toolsPromise
       }
@@ -184,8 +191,8 @@ export function makeEdgeCorePlugins(
 ): EdgeCorePlugins {
   const out: EdgeCorePlugins = {}
   for (const info of allInfo) {
-    const pluginName = info.currencyInfo.pluginName
-    out[pluginName] = makeCurrencyPluginFactory(info, makeIo)
+    const pluginId = info.currencyInfo.pluginId
+    out[pluginId] = makeCurrencyPluginFactory(info, makeIo)
   }
   return out
 }
