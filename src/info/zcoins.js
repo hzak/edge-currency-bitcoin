@@ -46,16 +46,16 @@ const bcoinInfo: BcoinCurrencyInfo = {
   magic: 0xd9b4bef9,
   formats: ['bip44', 'bip32'],
   keyPrefix: {
-    privkey: 0xd2,
-    xpubkey: 0x0488b21e,
-    xprivkey: 0x0488ade4,
+    privkey: 0xb9,
+    xpubkey: 0x043587cf,
+    xprivkey: 0x04358394,
     xpubkey58: 'xpub',
     xprivkey58: 'xprv',
     coinType: 136
   },
   addressPrefix: {
-    pubkeyhash: 0x52,
-    scripthash: 0x7
+    pubkeyhash: 0x41,
+    scripthash: 0xb2
   }
 }
 
