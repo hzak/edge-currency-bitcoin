@@ -9,6 +9,7 @@ import {
   type EdgeDataDump,
   type EdgeFreshAddress,
   type EdgeGetTransactionsOptions,
+  type EdgeLog,
   type EdgePaymentProtocolInfo,
   type EdgeSpendInfo,
   type EdgeSpendTarget,
@@ -115,6 +116,7 @@ export class CurrencyEngine {
   walletLocalDisklet: Disklet
   walletLocalEncryptedDisklet: Disklet
   io: PluginIo
+  log: EdgeLog
   feeUpdateInterval: number
   feeTimer: any
   fees: BitcoinFees
@@ -142,6 +144,7 @@ export class CurrencyEngine {
     this.walletLocalDisklet = options.walletLocalDisklet
     this.walletLocalEncryptedDisklet = options.walletLocalEncryptedDisklet
     this.io = io
+    this.log = options.log
     this.engineInfo = engineInfo
     this.feeUpdateInterval = this.engineInfo.feeUpdateInterval
     this.currencyCode = this.engineInfo.currencyCode
@@ -189,6 +192,7 @@ export class CurrencyEngine {
       files: { txs: 'txs.json', addresses: 'addresses.json' },
       callbacks: engineStateCallbacks,
       io: this.io,
+      log: this.log,
       localDisklet: this.walletLocalDisklet,
       encryptedLocalDisklet: this.walletLocalEncryptedDisklet,
       pluginState: this.pluginState,
@@ -226,7 +230,7 @@ export class CurrencyEngine {
     const rawKeys = { ...otherKeys, master: { xpub, ...master } }
 
     logger.info(
-      `${this.walletId} - Created Wallet Type ${format} for Currency Plugin ${this.pluginState.pluginName}`
+      `${this.walletId} - Created Wallet Type ${format} for Currency Plugin ${this.pluginState.pluginId}`
     )
 
     if (this.engineExtension) {
@@ -328,23 +332,7 @@ export class CurrencyEngine {
     }
     try {
       if (Date.now() - this.fees.timestamp > this.feeUpdateInterval) {
-        // try mempoolspace first
-        if (!success && mempoolSpaceFeeInfoServer) {
-          try {
-            const response = await this.io.fetch(mempoolSpaceFeeInfoServer)
-            if (response.ok) {
-              const feesJson = await response.json()
-              asMempoolSpaceResult(feesJson)
-              const newFees = calcFeesFromMempoolSpace(feesJson)
-              this.fees = { ...this.fees, ...newFees }
-              this.fees.timestamp = Date.now()
-              success = true
-            }
-          } catch (e) {
-            logger.info('mempool.space error', e)
-          }
-        }
-
+        // try earn.com first
         if (!success && earnComFeeInfoServer) {
           const response = await this.io.fetch(earnComFeeInfoServer)
           // try earn.com
@@ -360,6 +348,23 @@ export class CurrencyEngine {
             this.fees.timestamp = Date.now()
           } else {
             throw new Error('Fetched invalid networkFees')
+          }
+        }
+
+        // if necessary, try mempool.space
+        if (!success && mempoolSpaceFeeInfoServer) {
+          try {
+            const response = await this.io.fetch(mempoolSpaceFeeInfoServer)
+            if (response.ok) {
+              const feesJson = await response.json()
+              asMempoolSpaceResult(feesJson)
+              const newFees = calcFeesFromMempoolSpace(feesJson)
+              this.fees = { ...this.fees, ...newFees }
+              this.fees.timestamp = Date.now()
+              success = true
+            }
+          } catch (e) {
+            logger.info('mempool.space error', e)
           }
         }
       }
@@ -582,7 +587,8 @@ export class CurrencyEngine {
       pluginState: this.pluginState,
       walletId: this.prunedWalletId,
       engineInfo: this.engineInfo,
-      engineStateExtensions: engineStateExtensions
+      engineStateExtensions: engineStateExtensions,
+      log: this.log
     })
 
     await engineState.load()
@@ -690,6 +696,9 @@ export class CurrencyEngine {
         blockHeight: 0,
         nativeAmount: `${sumOfTx - parseInt(bcoinTx.getFee())}`,
         networkFee: `${bcoinTx.getFee()}`,
+        feeRateUsed: {
+          satPerVByte: rate / 1000
+        },
         signedTx: ''
       }
       return edgeTransaction
@@ -800,7 +809,7 @@ export class CurrencyEngine {
       walletId: this.walletId.split(' - ')[0],
       walletType: this.walletInfo.type,
       walletFormat: this.walletInfo.keys && this.walletInfo.keys.format,
-      pluginType: this.pluginState.pluginName,
+      pluginType: this.pluginState.pluginId,
       fees: this.fees,
       data: {
         ...this.pluginState.dumpData(),

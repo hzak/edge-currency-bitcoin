@@ -27,9 +27,9 @@ type MempoolSpaceResult = $Call<typeof asMempoolSpaceResult>
 const MAX_FEE = 999999999.0
 const LOW_FEE = 2
 const MAX_HIGH_DELAY = 200
-const MAX_STANDARD_DELAY = 30
-const MIN_STANDARD_DELAY = 5
-const MIN_LOW_DELAY = 3
+const MAX_STANDARD_DELAY = 6
+const MIN_STANDARD_DELAY = 2
+const MIN_LOW_DELAY = 1
 
 /**
  * Calculate the BitcoinFees object given a MempoolSpaceResult object
@@ -39,14 +39,21 @@ const MIN_LOW_DELAY = 3
 export function calcFeesFromMempoolSpace(
   mempoolSpaceFeesJson: MempoolSpaceResult
 ): $Shape<BitcoinFees> {
+  // Set minimum of LOW_FEE on all fee levels
   let lowFee = mempoolSpaceFeesJson.hourFee / 2
   lowFee = lowFee < LOW_FEE ? LOW_FEE : lowFee
+  let standardFeeLow = mempoolSpaceFeesJson.hourFee
+  standardFeeLow = standardFeeLow < LOW_FEE ? LOW_FEE : standardFeeLow
+  let standardFeeHigh = mempoolSpaceFeesJson.halfHourFee
+  standardFeeHigh = standardFeeHigh < LOW_FEE ? LOW_FEE : standardFeeHigh
+  let highFee = mempoolSpaceFeesJson.fastestFee
+  highFee = highFee < LOW_FEE ? LOW_FEE : highFee
 
   const out: $Shape<BitcoinFees> = {
     lowFee: lowFee.toString(),
-    standardFeeLow: mempoolSpaceFeesJson.hourFee.toString(),
-    standardFeeHigh: mempoolSpaceFeesJson.halfHourFee.toString(),
-    highFee: mempoolSpaceFeesJson.fastestFee.toString()
+    standardFeeLow: standardFeeLow.toString(),
+    standardFeeHigh: standardFeeHigh.toString(),
+    highFee: highFee.toString()
   }
   return out
 }
