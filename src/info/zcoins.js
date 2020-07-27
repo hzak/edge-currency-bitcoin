@@ -100,14 +100,7 @@ const currencyInfo: EdgeCurrencyInfo = {
   // Configuration options:
   defaultSettings: {
     customFeeSettings: ['satPerByte'],
-    electrumServers: [
-      'electrum://51.15.82.184:50001',
-      'electrum://45.63.92.224:50001',
-      'electrum://47.75.76.176:50001',
-      'electrums://51.15.82.184:50002',
-      'electrums://45.63.92.224:50002',
-      'electrums://47.75.76.176:50002'
-    ],
+    electrumServers: ['electrum://95.179.170.3:51001'],
     disableFetchingServers: true
   },
   metaTokens: [],
