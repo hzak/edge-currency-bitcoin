@@ -8,7 +8,7 @@ import type { EngineState } from '../../engine/engineState'
 import { KeyManager } from '../../engine/keyManager'
 import type { PluginIo } from '../../plugin/pluginIo'
 import { toNewFormat } from '../../utils/addressFormat.js'
-import type { BlockHeight, StandardOutput, Utxo } from '../../utils/coinUtils'
+import type { StandardOutput } from '../../utils/coinUtils'
 import { getPrivateFromSeed, toBcoinFormat } from '../../utils/coinUtils'
 import { logger } from '../../utils/logger'
 import type { PrivateCoin } from '../zcoins'
@@ -30,21 +30,14 @@ export type SpendCoin = {
 
 export type CreateSpendTxOptions = {
   mints: SpendCoin[],
-  utxos: Array<Utxo>,
-  rate: number,
   changeAddress: string,
   network: string,
-  outputs: Array<StandardOutput>,
-  height?: BlockHeight,
-  estimate?: Function,
-  io: PluginIo,
-  privateKey: string,
-  currentIndex: number
+  outputs: Array<StandardOutput>
 }
 
 export const createPrivateCoin = async (
   value: number,
-  privateKey: string,
+  privateKey: any,
   index: number,
   io: PluginIo
 ): Promise<PrivateCoin> => {
@@ -68,7 +61,7 @@ export const createPrivateCoin = async (
 
 export const createMintBranchPrivateKey = async (
   keyManager: KeyManager
-): Promise<string> => {
+): Promise<any> => {
   const path = keyManager.masterPath + '/' + BIP44_MINT_INDEX
   const priv = await getPrivateFromSeed(keyManager.seed, keyManager.network)
   const bip44Mint = await priv.derivePath(path)
@@ -76,7 +69,10 @@ export const createMintBranchPrivateKey = async (
   return bip44Mint
 }
 
-export const createPrivateKeyForIndex = async (key: any, index: number) => {
+export const createPrivateKeyForIndex = async (
+  key: any,
+  index: number
+): Promise<string> => {
   const forIndex = await key.derive(index)
   return forIndex.privateKey.toString('hex')
 }
