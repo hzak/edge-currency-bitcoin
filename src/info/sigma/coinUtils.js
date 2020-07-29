@@ -41,13 +41,20 @@ export const createPrivateCoin = async (
   index: number,
   io: PluginIo
 ): Promise<PrivateCoin> => {
+  logger.info('Zcoins -> sigmaMint privateKey', JSON.stringify(privateKey))
   const mintPrivateKey = await createPrivateKeyForIndex(privateKey, index)
+  logger.info(
+    'Zcoins -> sigmaMint mintPrivateKey',
+    index,
+    JSON.stringify(mintPrivateKey)
+  )
 
   const { commitment, serialNumber } = await io.sigmaMint({
     denomination: value / SIGMA_COIN,
     privateKey: mintPrivateKey,
     index
   })
+  logger.info('Zcoins -> createPrivateCoin sigmaMint done')
   return {
     value,
     index,
@@ -142,9 +149,15 @@ const fillSpendScriptIntoTX = async (
   for (let i = 0; i < mints.length; i++) {
     const mint = mints[i]
 
+    logger.info('Zcoins -> sigmaSpend privateKey', JSON.stringify(privateKey))
     const mintPrivateKey = await createPrivateKeyForIndex(
       privateKey,
       mint.index
+    )
+    logger.info(
+      'Zcoins -> sigmaSpend mintPrivateKey',
+      mint.index,
+      JSON.stringify(mintPrivateKey)
     )
 
     const spendProof = await io.sigmaSpend({
@@ -156,6 +169,8 @@ const fillSpendScriptIntoTX = async (
       blockHash: mint.blockHash,
       txHash: hash
     })
+
+    logger.info('Zcoins -> createPrivateCoin sigmaSpend done')
 
     mtx.inputs[i].script.fromRaw(
       Buffer.from(OP_SIGMA_SPEND + spendProof, 'hex')
