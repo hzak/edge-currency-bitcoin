@@ -233,10 +233,6 @@ export class CurrencyEngine {
       `${this.walletId} - Created Wallet Type ${format} for Currency Plugin ${this.pluginState.pluginId}`
     )
 
-    if (this.engineExtension) {
-      await this.engineExtension.load(this)
-    }
-
     this.keyManager = new KeyManager({
       seed: seed,
       bip: format,
@@ -257,6 +253,10 @@ export class CurrencyEngine {
     }
 
     await this.keyManager.load()
+
+    if (this.engineExtension) {
+      await this.engineExtension.load(this)
+    }
   }
 
   async getTransaction(txid: string): Promise<EdgeTransaction> {
