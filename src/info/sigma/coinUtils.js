@@ -69,6 +69,7 @@ export const createPrivateCoin = async (
 export const createMintBranchPrivateKey = async (
   keyManager: KeyManager
 ): Promise<any> => {
+  await keyManager.initMasterKeys()
   const path = keyManager.masterPath + '/' + BIP44_MINT_INDEX
   const priv = await getPrivateFromSeed(keyManager.seed, keyManager.network)
   const bip44Mint = await priv.derivePath(path)
