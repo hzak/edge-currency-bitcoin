@@ -534,8 +534,6 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
         outputs
       )
 
-      // TODO: remove mints: mintedInTx not need
-      const privateKey = await this.getMintBranchPrivateKey()
       const {
         tx: bcoinTx,
         mints: mintedInTx,
@@ -544,15 +542,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       } = await createSpendTX({
         mints: spendCoins,
         outputs: standardOutputs,
-        rate,
-        txOptions,
-        utxos,
-        height: this.currencyEngine.getBlockHeight(),
-        io: this.io,
-        privateKey: privateKey,
-        currentIndex: currentMaxIndex,
         changeAddress: this.keyManager.getChangeAddress(),
-        estimate: prev => this.keyManager.fSelector.estimateSize(prev),
         network: this.keyManager.network
       })
 
