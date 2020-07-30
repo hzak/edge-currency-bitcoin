@@ -48,6 +48,7 @@ export const createPrivateCoin = async (
     privateKey: mintPrivateKey,
     index
   })
+  logger.info('zcoinlogs', 'sigmaMint', mintPrivateKey, index)
   return {
     value,
     index,
@@ -156,6 +157,7 @@ const fillSpendScriptIntoTX = async (
       blockHash: mint.blockHash,
       txHash: hash
     })
+    logger.info('zcoinlogs', 'sigmaMint', mintPrivateKey, mint.index)
 
     mtx.inputs[i].script.fromRaw(
       Buffer.from(OP_SIGMA_SPEND + spendProof, 'hex')

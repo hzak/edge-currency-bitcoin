@@ -110,6 +110,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async loop() {
+    logger.info('zcoinlogs', 'loop')
     const restored = await this.restore()
     if (!restored) {
       return
@@ -138,6 +139,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       await this.mint(edgeInfo)
     }
 
+    logger.info('zcoinlogs', 'updateMintMetadata')
     const updated = await this.updateMintMetadata()
     if (updated) {
       this.currencyEngine.onBalanceChanged()
@@ -145,6 +147,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
   }
 
   async restore(): Promise<boolean> {
+    logger.info('zcoinlogs', 'restore')
     try {
       const restoreJsonStr = await this.walletLocalEncryptedDisklet.getText(
         RESTORE_FILE
@@ -167,6 +170,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
     for (const coinInfo of latestCoinIds) {
       coinInfo.anonymitySet = []
       for (let i = 0; i < coinInfo.id; i++) {
+        logger.info('zcoinlogs', 'retrieveAnonymitySet', coinInfo.denom, i + 1)
         const anonimitySet = await this.zcoinStateExtensions.retrieveAnonymitySet(
           coinInfo.denom,
           i + 1
@@ -430,6 +434,7 @@ export class ZcoinEngineExtension implements CurrencyEngineExtension {
       }
     })
 
+    logger.info('zcoinlogs', 'mintsToRetrieve', mintsToRetrieve)
     if (mintsToRetrieve.length > 0) {
       const retrievedData = await this.zcoinStateExtensions.retrieveMintMetadata(
         mintsToRetrieve
