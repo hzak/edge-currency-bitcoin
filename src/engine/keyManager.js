@@ -265,6 +265,8 @@ export class KeyManager {
       }
       await this.initMasterKeys()
       const { branches } = this.fSelector
+      logger.info('debugingissue', 'tx', JSON.stringify(tx))
+      logger.info('debugingissue', 'tx.inputs', JSON.stringify(tx.inputs))
       for (const input of tx.inputs) {
         const { prevout } = input
         if (prevout) {
@@ -347,6 +349,7 @@ export class KeyManager {
   ): { branch: number, index: number, redeemScript?: string } {
     const { parsedTxs, addressInfos } = this.engineState
 
+    logger.info('debugingissue', 'parsedTxs', JSON.stringify(parsedTxs))
     const parsedTx = parsedTxs[prevout.rhash()]
     if (!parsedTx) throw new Error('UTXO not synced yet')
     const output = parsedTx.outputs[prevout.index]
