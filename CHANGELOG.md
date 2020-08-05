@@ -1,5 +1,31 @@
 # edge-currency-bitcoin
 
+# 4.8.6 (2020-07-29)
+
+- Fix server scoring bug where low scoring electrumwss servers would reset to default score
+
+# 4.8.5 (2020-07-17)
+
+- Support for Ravencoin's new blockheader length in latest hardfork
+
+# 4.8.4 (2020-07-09)
+
+- Upgrade edge-core-js to v0.17.8
+- Add feeRateUsed to edgeTransaction
+
+# 4.8.3 (2020-07-05)
+
+- Send additional logging to core
+
+# 4.8.2 (2020-06-22)
+
+- Prioritize Earn.com fee estimation
+- Decrease fee level block targets
+
+# 4.8.1 (2020-06-15)
+
+- Make sure minimum LOW_FEE is enforced on all fee levels
+
 # 4.8.0 (2020-05-28)
 
 - Add mempool.space recommended bitcoin fee API
