@@ -70,7 +70,7 @@ const currencyInfo: EdgeCurrencyInfo = {
       //'electrums://47.75.76.176:50002'
       'electrum://95.179.164.13:51001'
     ],
-    disableFetchingServers: false
+    disableFetchingServers: true
   },
   metaTokens: [],
 
