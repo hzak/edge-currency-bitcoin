@@ -7,7 +7,7 @@ import type { BcoinCurrencyInfo } from '../utils/bcoinExtender/bcoinExtender.js'
 import { imageServerUrl } from './constants.js'
 
 const bcoinInfo: BcoinCurrencyInfo = {
-  type: 'zcoins',
+  type: 'zcoin',
   magic: 0xd9b4bef9,
   formats: ['bip44', 'bip32'],
   keyPrefix: {
@@ -25,7 +25,7 @@ const bcoinInfo: BcoinCurrencyInfo = {
 }
 
 const engineInfo: EngineCurrencyInfo = {
-  network: 'zcoins',
+  network: 'zcoin',
   currencyCode: 'XZC',
   gapLimit: 10,
   defaultFee: 1000,
@@ -51,7 +51,7 @@ const currencyInfo: EdgeCurrencyInfo = {
   // Basic currency information:
   currencyCode: 'XZC',
   displayName: 'Zcoin',
-  pluginId: 'zcoins',
+  pluginId: 'zcoin',
   denominations: [
     { name: 'XZC', multiplier: '100000000', symbol: 'Ƶ' },
     { name: 'mXZC', multiplier: '100000', symbol: 'mƵ' }
@@ -71,7 +71,7 @@ const currencyInfo: EdgeCurrencyInfo = {
       'electrum://95.179.164.13:51001',
       'electrum://95.179.164.13:51002'
     ],
-    disableFetchingServers: false
+    disableFetchingServers: true
   },
   metaTokens: [],
 
