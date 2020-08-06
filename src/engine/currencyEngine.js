@@ -675,12 +675,12 @@ export class CurrencyEngine {
     this.logEdgeTransaction(edgeTransaction, 'Signing')
     const bcoinTx = parseJsonTransaction(txJson)
     const { privateKeys = [] } = edgeSpendInfo
-    logger.info('debugingissue bcoinTx ' + JSON.stringify(bcoinTx))
-    logger.info('debugingissue bcoinTx.inputs ' + JSON.stringify(bcoinTx.inputs))
+    this.log('debugingissue bcoinTx ' + JSON.stringify(bcoinTx))
+    this.log('debugingissue bcoinTx.inputs ' + JSON.stringify(bcoinTx.inputs))
     for (const input of bcoinTx.inputs) {
       const { prevout } = input
       if (prevout) {
-        logger.info('debugingissue prevout.rhash() ' + prevout.rhash())
+        this.log('debugingissue prevout.rhash() ' + prevout.rhash())
       }
     }
     const { signedTx, txid } = await this.keyManager.sign(bcoinTx, privateKeys)
