@@ -968,8 +968,9 @@ export class EngineState extends EventEmitter {
           throw new Error('Missing txFile')
         }
         const json = JSON.stringify({ txs: this.txCache })
+        this.log(`debugingissue save txCache json ` + json)
         await this.localDisklet.setText(this.txFile, json)
-        this.log(`Saved txCache`)
+        this.log(`Saved txCache ` + this.txFile)
         this.txCacheDirty = false
       } catch (e) {
         this.log(`Error saving txCache: ${e.toString()}`)
@@ -1064,7 +1065,9 @@ export class EngineState extends EventEmitter {
   // A server has sent a transaction, so update the caches:
   handleTxFetch(txid: string, txData: string) {
     const parsedTx = parseTransaction(txData)
+    this.log('debugingissue parsedTx ' + JSON.stringify(parsedTx))
     this.txCache[txid] = txData
+    this.log('debugingissue txCache ' + txid + ' ' + JSON.stringify(this.txCache[txid]))
     this.parsedTxs[txid] = parsedTx
     delete this.missingTxs[txid]
     for (const scriptHash of this.findAffectedAddressesForInputs(txid)) {
